@@ -1,0 +1,18 @@
+# Archimedes project files (directive, notes, metadata)
+_arc/
+
+# Gradle / Android
+.gradle/
+build/
+local.properties
+.kotlin/
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing — never commit
+*.jks
+*.keystore
+keystore.properties
