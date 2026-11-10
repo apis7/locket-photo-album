@@ -39,7 +39,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.locketphoto.gallery.ui.components.LocalNavScope
+import com.locketphoto.gallery.ui.components.LocalSharedScope
 import com.locketphoto.gallery.ui.grid.GridActions
+import com.locketphoto.gallery.ui.grid.rememberThumbPx
+import com.locketphoto.gallery.ui.viewer.ViewerScreen
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -73,10 +86,13 @@ private fun LocketRoot() {
     val selection by vm.selection.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
     val activity = LocalContext.current
+    val gridState = rememberLazyGridState()
+    var viewerStart by rememberSaveable { mutableStateOf<Int?>(null) }
+    val thumbPx = rememberThumbPx()
 
     val actions = remember(vm) {
         GridActions(
-            onOpen = { /* viewer comes next */ },
+            onOpen = { index -> viewerStart = index },
             onToggle = { id ->
                 haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                 vm.toggle(id)
@@ -96,7 +112,40 @@ private fun LocketRoot() {
             },
         )
     }
-    GridScreen(state = state, selection = selection, actions = actions)
+
+    SharedTransitionLayout {
+        CompositionLocalProvider(LocalSharedScope provides this) {
+            AnimatedContent(
+                targetState = viewerStart,
+                transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(260)) },
+                label = "nav",
+            ) { start ->
+                CompositionLocalProvider(LocalNavScope provides this) {
+                    if (start == null) {
+                        GridScreen(state = state, selection = selection, actions = actions, gridState = gridState)
+                    } else {
+                        ViewerScreen(
+                            items = state.items,
+                            startIndex = start,
+                            thumbPx = thumbPx,
+                            onClose = { index ->
+                                // Make sure the photo we land on is on screen, so it can fly home.
+                                val entry = state.entryIndexOfItem.getOrNull(index)
+                                if (entry != null) {
+                                    val visible = gridState.layoutInfo.visibleItemsInfo
+                                    val first = visible.firstOrNull()?.index ?: 0
+                                    val last = visible.lastOrNull()?.index ?: 0
+                                    if (entry <= first || entry >= last) gridState.requestScrollToItem((entry - 8).coerceAtLeast(0))
+                                }
+                                viewerStart = null
+                            },
+                            onShare = { item -> shareMedia(activity, arrayListOf(item.uri)) },
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 private fun shareMedia(context: Context, uris: ArrayList<Uri>) {

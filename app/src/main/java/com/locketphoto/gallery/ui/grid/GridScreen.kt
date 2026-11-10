@@ -76,7 +76,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import com.locketphoto.gallery.ui.components.sharedMedia
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -99,6 +100,21 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val COLUMNS = 4
 private val CellGap = 2.dp
 private val CellShape = RoundedCornerShape(3.dp)
+
+/**
+ * Thumbnail request size, in a few fixed buckets so the memory cache is shared between
+ * the grid and the viewer (which shows the thumb instantly while the full photo loads).
+ */
+@Composable
+fun rememberThumbPx(): Int {
+    val width = LocalWindowInfo.current.containerSize.width
+    val cellPx = width / COLUMNS
+    return when {
+        cellPx <= 256 -> 256
+        cellPx <= 384 -> 384
+        else -> 512
+    }
+}
 
 /** Everything the grid can ask of its owner. */
 class GridActions(
@@ -130,14 +146,7 @@ fun GridScreen(
     BackHandler(enabled = selecting) { actions.onClearSelection() }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        val density = LocalDensity.current
-        // Request thumbnails in a few fixed size buckets so the cache is reused across rotations.
-        val cellPx = with(density) { (maxWidth / COLUMNS).toPx() }.toInt()
-        val thumbPx = when {
-            cellPx <= 256 -> 256
-            cellPx <= 384 -> 384
-            else -> 512
-        }
+        val thumbPx = rememberThumbPx()
         val padding = PaddingValues(
             top = status.calculateTopPadding() + topBarHeight,
             bottom = nav.calculateBottomPadding() + 24.dp,
@@ -392,6 +401,7 @@ private fun MediaCell(
         Box(
             Modifier
                 .fillMaxSize()
+                .sharedMedia(item.id, RoundedCornerShape(corner))
                 .graphicsLayer {
                     val s = pressScale * selScale
                     scaleX = s

@@ -13,6 +13,13 @@ data class MediaItem(
     val durationMs: Long,
     val width: Int,
     val height: Int,
+    /** Clockwise rotation (0/90/180/270) to apply to the stored pixels. */
+    val orientation: Int,
     val bucket: String?,
     val isFavorite: Boolean,
-)
+) {
+    /** Width/height as the photo is meant to be seen (after rotation); 0 if unknown. */
+    val displayWidth: Int get() = if (orientation % 180 == 90) height else width
+    val displayHeight: Int get() = if (orientation % 180 == 90) width else height
+    val aspect: Float get() = if (displayWidth > 0 && displayHeight > 0) displayWidth.toFloat() / displayHeight else 1f
+}

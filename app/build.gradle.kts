@@ -54,5 +54,6 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.media3.exoplayer)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

@@ -55,6 +55,7 @@ class MediaRepository(private val resolver: ContentResolver) {
             FileColumns.HEIGHT,
             FileColumns.BUCKET_DISPLAY_NAME,
             FileColumns.IS_FAVORITE,
+            FileColumns.ORIENTATION,
         )
         val selection = "${FileColumns.MEDIA_TYPE} IN (?, ?)"
         val args = arrayOf(
@@ -74,6 +75,7 @@ class MediaRepository(private val resolver: ContentResolver) {
             val iH = c.getColumnIndexOrThrow(FileColumns.HEIGHT)
             val iBucket = c.getColumnIndexOrThrow(FileColumns.BUCKET_DISPLAY_NAME)
             val iFav = c.getColumnIndexOrThrow(FileColumns.IS_FAVORITE)
+            val iOri = c.getColumnIndexOrThrow(FileColumns.ORIENTATION)
             while (c.moveToNext()) {
                 val id = c.getLong(iId)
                 val isVideo = c.getInt(iType) == FileColumns.MEDIA_TYPE_VIDEO
@@ -93,6 +95,7 @@ class MediaRepository(private val resolver: ContentResolver) {
                     durationMs = c.getLong(iDur),
                     width = c.getInt(iW),
                     height = c.getInt(iH),
+                    orientation = c.getInt(iOri),
                     bucket = c.getString(iBucket),
                     isFavorite = c.getInt(iFav) == 1,
                 )

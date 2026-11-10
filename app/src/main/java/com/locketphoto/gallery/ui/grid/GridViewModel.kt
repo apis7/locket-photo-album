@@ -35,6 +35,8 @@ data class GridUiState(
     val loading: Boolean = true,
     val entries: List<GridEntry> = emptyList(),
     val items: List<MediaItem> = emptyList(),
+    /** Position in [entries] of each item in [items]. */
+    val entryIndexOfItem: IntArray = IntArray(0),
 )
 
 class GridViewModel(repo: MediaRepository) : ViewModel() {
@@ -43,7 +45,12 @@ class GridViewModel(repo: MediaRepository) : ViewModel() {
     val selection: StateFlow<Set<Long>> = _selection.asStateFlow()
 
     val state: StateFlow<GridUiState> = repo.observeAll()
-        .map { items -> GridUiState(loading = false, entries = buildEntries(items), items = items) }
+        .map { items ->
+            val entries = buildEntries(items)
+            val pos = IntArray(items.size)
+            entries.forEachIndexed { i, e -> if (e is GridEntry.Cell) pos[e.index] = i }
+            GridUiState(loading = false, entries = entries, items = items, entryIndexOfItem = pos)
+        }
         .onEach { s -> // drop selections whose files vanished
             val ids = s.items.mapTo(HashSet()) { it.id }
             _selection.update { sel -> sel.filterTo(LinkedHashSet()) { it in ids } }
