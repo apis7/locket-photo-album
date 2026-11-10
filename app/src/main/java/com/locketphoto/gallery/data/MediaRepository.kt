@@ -3,6 +3,7 @@ package com.locketphoto.gallery.data
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.database.ContentObserver
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -23,13 +24,18 @@ class MediaRepository(private val resolver: ContentResolver) {
     private val filesUri = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
 
     /** Emits the whole library now, and again whenever MediaStore changes. */
+    fun observeAll(): Flow<List<MediaItem>> = observe { query(trashed = false) }
+
+    /** Emits what's in the trash (system keeps it 30 days), newest-trashed first. */
+    fun observeTrash(): Flow<List<MediaItem>> = observe { query(trashed = true).sortedByDescending { it.expiresAt } }
+
     @OptIn(FlowPreview::class)
-    fun observeAll(): Flow<List<MediaItem>> =
+    private fun observe(load: () -> List<MediaItem>): Flow<List<MediaItem>> =
         changes()
             .onStart { emit(Unit) }
             .debounce(250)
             .conflate()
-            .map { queryAll() }
+            .map { load() }
             .flowOn(Dispatchers.IO)
 
     private fun changes(): Flow<Unit> = callbackFlow {
@@ -42,7 +48,7 @@ class MediaRepository(private val resolver: ContentResolver) {
         awaitClose { resolver.unregisterContentObserver(observer) }
     }
 
-    fun queryAll(): List<MediaItem> {
+    private fun query(trashed: Boolean): List<MediaItem> {
         val projection = arrayOf(
             FileColumns._ID,
             FileColumns.MEDIA_TYPE,
@@ -56,14 +62,19 @@ class MediaRepository(private val resolver: ContentResolver) {
             FileColumns.BUCKET_DISPLAY_NAME,
             FileColumns.IS_FAVORITE,
             FileColumns.ORIENTATION,
+            FileColumns.DATE_EXPIRES,
         )
-        val selection = "${FileColumns.MEDIA_TYPE} IN (?, ?)"
-        val args = arrayOf(
-            FileColumns.MEDIA_TYPE_IMAGE.toString(),
-            FileColumns.MEDIA_TYPE_VIDEO.toString(),
-        )
-        val out = ArrayList<MediaItem>(4096)
-        resolver.query(filesUri, projection, selection, args, "${FileColumns.DATE_TAKEN} DESC")?.use { c ->
+        val args = Bundle().apply {
+            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, "${FileColumns.MEDIA_TYPE} IN (?, ?)")
+            putStringArray(
+                ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,
+                arrayOf(FileColumns.MEDIA_TYPE_IMAGE.toString(), FileColumns.MEDIA_TYPE_VIDEO.toString()),
+            )
+            putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, "${FileColumns.DATE_TAKEN} DESC")
+            putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, if (trashed) MediaStore.MATCH_ONLY else MediaStore.MATCH_EXCLUDE)
+        }
+        val out = ArrayList<MediaItem>(if (trashed) 64 else 4096)
+        resolver.query(filesUri, projection, args, null)?.use { c ->
             val iId = c.getColumnIndexOrThrow(FileColumns._ID)
             val iType = c.getColumnIndexOrThrow(FileColumns.MEDIA_TYPE)
             val iMime = c.getColumnIndexOrThrow(FileColumns.MIME_TYPE)
@@ -76,6 +87,7 @@ class MediaRepository(private val resolver: ContentResolver) {
             val iBucket = c.getColumnIndexOrThrow(FileColumns.BUCKET_DISPLAY_NAME)
             val iFav = c.getColumnIndexOrThrow(FileColumns.IS_FAVORITE)
             val iOri = c.getColumnIndexOrThrow(FileColumns.ORIENTATION)
+            val iExp = c.getColumnIndexOrThrow(FileColumns.DATE_EXPIRES)
             while (c.moveToNext()) {
                 val id = c.getLong(iId)
                 val isVideo = c.getInt(iType) == FileColumns.MEDIA_TYPE_VIDEO
@@ -98,6 +110,7 @@ class MediaRepository(private val resolver: ContentResolver) {
                     orientation = c.getInt(iOri),
                     bucket = c.getString(iBucket),
                     isFavorite = c.getInt(iFav) == 1,
+                    expiresAt = c.getLong(iExp) * 1000,
                 )
             }
         }

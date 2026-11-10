@@ -32,6 +32,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
+import com.locketphoto.gallery.ui.theme.Gold
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -79,9 +87,17 @@ fun ViewerScreen(
     thumbPx: Int,
     onClose: (index: Int) -> Unit,
     onShare: (MediaItem) -> Unit,
+    onFavorite: (MediaItem) -> Unit,
+    onTrash: (MediaItem) -> Unit,
 ) {
+    if (items.isEmpty()) {
+        LaunchedEffect(Unit) { onClose(0) }
+        return
+    }
     val pager = rememberPagerState(initialPage = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))) { items.size }
     var chrome by remember { mutableStateOf(true) }
+    var infoFor by remember { mutableStateOf<MediaItem?>(null) }
+    var activeVideo by remember { mutableStateOf<VideoController?>(null) }
     val dismiss = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -112,9 +128,9 @@ fun ViewerScreen(
                 settled = page == pager.settledPage,
                 dismissOffset = if (isCurrent) dismiss.value else 0f,
                 dismissProgress = if (isCurrent) progress else 0f,
-                chromeVisible = chrome,
                 onTap = { chrome = !chrome },
                 onDismissDrag = { dy -> scope.launch { dismiss.snapTo(dismiss.value + dy) } },
+                onVideo = { v, on -> if (on) activeVideo = v else if (activeVideo === v) activeVideo = null },
                 onDismissEnd = {
                     if (abs(dismiss.value) > closeThresholdPx) {
                         onClose(pager.currentPage)
@@ -135,14 +151,24 @@ fun ViewerScreen(
             TopChrome(current, onBack = { onClose(pager.currentPage) })
         }
         AnimatedVisibility(
-            visible = chrome && progress < 0.05f && current?.isVideo == false,
+            visible = chrome && progress < 0.05f,
             enter = fadeIn() + slideInVertically { it / 2 },
             exit = fadeOut() + slideOutVertically { it / 2 },
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            BottomChrome(onShare = { current?.let(onShare) })
+            Column {
+            activeVideo?.let { VideoControls(it, visible = true) }
+            BottomChrome(
+                isFavorite = current?.isFavorite == true,
+                onShare = { current?.let(onShare) },
+                onFavorite = { current?.let(onFavorite) },
+                onInfo = { infoFor = current },
+                onTrash = { current?.let(onTrash) },
+            )
+            }
         }
     }
+    infoFor?.let { InfoSheet(it, onDismiss = { infoFor = null }) }
 }
 
 @Composable
@@ -153,10 +179,10 @@ private fun MediaPage(
     settled: Boolean,
     dismissOffset: Float,
     dismissProgress: Float,
-    chromeVisible: Boolean,
     onTap: () -> Unit,
     onDismissDrag: (Float) -> Unit,
     onDismissEnd: () -> Unit,
+    onVideo: (VideoController, Boolean) -> Unit,
 ) {
     val zoom = remember(item.id) { ZoomState() }
     val scope = rememberCoroutineScope()
@@ -197,12 +223,9 @@ private fun MediaPage(
                     val video = rememberVideoController(item)
                     // Invisible until the first frame lands, so the thumbnail shows instead of black.
                     VideoSurface(video, Modifier.fillMaxSize().graphicsLayer { alpha = if (video.firstFrame) 1f else 0f })
-                    Box(Modifier.fillMaxSize()) {
-                        VideoControls(
-                            video,
-                            visible = chromeVisible && dismissProgress < 0.05f,
-                            modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars),
-                        )
+                    DisposableEffect(video) {
+                        onVideo(video, true)
+                        onDispose { onVideo(video, false) }
                     }
                 } else {
                     Icon(
@@ -265,7 +288,13 @@ private fun TopChrome(item: MediaItem?, onBack: () -> Unit) {
 }
 
 @Composable
-private fun BottomChrome(onShare: () -> Unit) {
+private fun BottomChrome(
+    isFavorite: Boolean,
+    onShare: () -> Unit,
+    onFavorite: () -> Unit,
+    onInfo: () -> Unit,
+    onTrash: () -> Unit,
+) {
     Row(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
@@ -276,6 +305,24 @@ private fun BottomChrome(onShare: () -> Unit) {
             .padding(vertical = 8.dp),
     ) {
         IconButton(onClick = onShare) { Icon(Icons.Rounded.Share, "Share", tint = Color.White) }
+        IconButton(onClick = onFavorite) {
+            // Star pops with a bouncy scale when toggled.
+            AnimatedContent(
+                targetState = isFavorite,
+                transitionSpec = {
+                    (scaleIn(spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium), initialScale = 0.4f) + fadeIn()) togetherWith fadeOut()
+                },
+                label = "star",
+            ) { fav ->
+                Icon(
+                    if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    if (fav) "Unstar" else "Star",
+                    tint = if (fav) Gold else Color.White,
+                )
+            }
+        }
+        IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, "Details", tint = Color.White) }
+        IconButton(onClick = onTrash) { Icon(Icons.Outlined.Delete, "Move to trash", tint = Color.White) }
     }
 }
 

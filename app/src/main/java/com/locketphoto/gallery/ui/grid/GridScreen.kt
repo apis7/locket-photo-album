@@ -53,6 +53,11 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -126,6 +131,9 @@ class GridActions(
     val onClearSelection: () -> Unit,
     val onSelectAll: () -> Unit,
     val onShare: () -> Unit,
+    val onStarSelected: () -> Unit,
+    val onTrashSelected: () -> Unit,
+    val onOpenTrash: () -> Unit,
 )
 
 @Composable
@@ -338,6 +346,21 @@ private fun TopBar(height: Dp, count: Int, selectedCount: Int, actions: GridActi
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }
+                    Spacer(Modifier.weight(1f))
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Trash") },
+                                leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                                onClick = {
+                                    menu = false
+                                    actions.onOpenTrash()
+                                },
+                            )
+                        }
+                    }
                 }
             } else {
                 Row(Modifier.fillMaxSize().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -356,6 +379,8 @@ private fun TopBar(height: Dp, count: Int, selectedCount: Int, actions: GridActi
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = actions.onSelectAll) { Icon(Icons.Rounded.SelectAll, "Select all") }
                     IconButton(onClick = actions.onShare) { Icon(Icons.Rounded.Share, "Share") }
+                    IconButton(onClick = actions.onStarSelected) { Icon(Icons.Rounded.StarBorder, "Star") }
+                    IconButton(onClick = actions.onTrashSelected) { Icon(Icons.Outlined.Delete, "Move to trash") }
                 }
             }
         }
