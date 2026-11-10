@@ -36,7 +36,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.locketphoto.gallery.ui.grid.GridActions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -67,7 +70,45 @@ private fun LocketRoot() {
     val context = LocalContext.current.applicationContext
     val vm: GridViewModel = viewModel { GridViewModel(MediaRepository(context.contentResolver)) }
     val state by vm.state.collectAsStateWithLifecycle()
-    GridScreen(state = state, onOpen = { /* viewer comes next */ })
+    val selection by vm.selection.collectAsStateWithLifecycle()
+    val haptics = LocalHapticFeedback.current
+    val activity = LocalContext.current
+
+    val actions = remember(vm) {
+        GridActions(
+            onOpen = { /* viewer comes next */ },
+            onToggle = { id ->
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                vm.toggle(id)
+            },
+            onDragStart = { index ->
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                vm.startDragSelect(index)
+            },
+            onDragTo = { index -> vm.dragSelectTo(index) },
+            onDragEnd = vm::endDragSelect,
+            onClearSelection = vm::clearSelection,
+            onSelectAll = vm::selectAll,
+            onShare = {
+                val chosen = vm.selection.value
+                val uris = ArrayList(vm.state.value.items.filter { it.id in chosen }.map { it.uri })
+                shareMedia(activity, uris)
+            },
+        )
+    }
+    GridScreen(state = state, selection = selection, actions = actions)
+}
+
+private fun shareMedia(context: Context, uris: ArrayList<Uri>) {
+    if (uris.isEmpty()) return
+    val send = if (uris.size == 1) {
+        Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+    }
+    send.type = context.contentResolver.getType(uris[0])?.takeIf { uris.size == 1 } ?: "*/*"
+    send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    context.startActivity(Intent.createChooser(send, null))
 }
 
 private val mediaPermissions: Array<String> =
