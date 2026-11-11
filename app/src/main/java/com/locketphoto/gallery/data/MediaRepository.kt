@@ -63,6 +63,7 @@ class MediaRepository(private val resolver: ContentResolver) {
             FileColumns.IS_FAVORITE,
             FileColumns.ORIENTATION,
             FileColumns.DATE_EXPIRES,
+            FileColumns.DISPLAY_NAME,
         )
         val args = Bundle().apply {
             putString(ContentResolver.QUERY_ARG_SQL_SELECTION, "${FileColumns.MEDIA_TYPE} IN (?, ?)")
@@ -88,6 +89,7 @@ class MediaRepository(private val resolver: ContentResolver) {
             val iFav = c.getColumnIndexOrThrow(FileColumns.IS_FAVORITE)
             val iOri = c.getColumnIndexOrThrow(FileColumns.ORIENTATION)
             val iExp = c.getColumnIndexOrThrow(FileColumns.DATE_EXPIRES)
+            val iName = c.getColumnIndexOrThrow(FileColumns.DISPLAY_NAME)
             while (c.moveToNext()) {
                 val id = c.getLong(iId)
                 val isVideo = c.getInt(iType) == FileColumns.MEDIA_TYPE_VIDEO
@@ -111,6 +113,7 @@ class MediaRepository(private val resolver: ContentResolver) {
                     bucket = c.getString(iBucket),
                     isFavorite = c.getInt(iFav) == 1,
                     expiresAt = c.getLong(iExp) * 1000,
+                    name = c.getString(iName).orEmpty(),
                 )
             }
         }

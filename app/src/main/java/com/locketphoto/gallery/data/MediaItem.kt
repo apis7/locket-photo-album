@@ -19,6 +19,7 @@ data class MediaItem(
     val isFavorite: Boolean,
     /** When the system will purge it from the trash (epoch millis); 0 if not trashed. */
     val expiresAt: Long = 0L,
+    val name: String = "",
 ) {
     /** Width/height as the photo is meant to be seen (after rotation); 0 if unknown. */
     val displayWidth: Int get() = if (orientation % 180 == 90) height else width

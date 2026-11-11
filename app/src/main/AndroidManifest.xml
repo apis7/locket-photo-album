@@ -12,6 +12,7 @@
     <!-- "Media management" (Android 12+): lets trash/star skip the per-action confirm dialog.
          The user grants it in Settings; it is optional. -->
     <uses-permission android:name="android.permission.MANAGE_MEDIA" />
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
     <application
         android:name=".LocketApp"

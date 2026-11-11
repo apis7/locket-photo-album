@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SlowMotionVideo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.container.MdtaMetadataEntry
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.metadata.mp4.SlowMotionData
+import androidx.media3.extractor.mp4.Mp4Extractor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.locketphoto.gallery.data.MediaItem
@@ -58,6 +65,11 @@ class VideoController(val player: ExoPlayer) {
     var duration by mutableLongStateOf(0L)
     var firstFrame by mutableStateOf(false)
 
+    /** Slow-motion sections (ms ranges with a speed), found in the file's metadata. */
+    var slowMo by mutableStateOf<List<SlowSegment>>(emptyList())
+    /** Lets the user watch a slow-mo clip at real speed. */
+    var slowMoOn by mutableStateOf(true)
+
     fun togglePlay() {
         if (player.isPlaying) player.pause() else player.play()
     }
@@ -66,17 +78,54 @@ class VideoController(val player: ExoPlayer) {
         muted = !muted
         player.volume = if (muted) 0f else 1f
     }
+
+    internal fun speedAt(ms: Long): Float =
+        if (!slowMoOn) 1f else slowMo.firstOrNull { ms in it.startMs until it.endMs }?.speed ?: 1f
+}
+
+data class SlowSegment(val startMs: Long, val endMs: Long, val speed: Float)
+
+/**
+ * Reads slow-motion info from track metadata:
+ * - Samsung SEF slow-mo: exact segments and speed divisors.
+ * - Standard high-frame-rate capture ("com.android.capture.fps" >= 90): slow the middle,
+ *   like the phone's own gallery does.
+ */
+@OptIn(UnstableApi::class)
+private fun slowSegmentsOf(tracks: Tracks, durationMs: Long): List<SlowSegment> {
+    var captureFps = 0f
+    for (group in tracks.groups) for (i in 0 until group.length) {
+        val format = group.getTrackFormat(i)
+        val md = format.metadata ?: continue
+        for (k in 0 until md.length()) {
+            when (val e = md.get(k)) {
+                is SlowMotionData -> return e.segments.map { seg ->
+                    SlowSegment(seg.startTimeMs, seg.endTimeMs, 1f / seg.speedDivisor.coerceAtLeast(1))
+                }
+                is MdtaMetadataEntry -> if (e.key == "com.android.capture.fps" && e.value.size >= 4) {
+                    captureFps = java.nio.ByteBuffer.wrap(e.value).float
+                }
+            }
+        }
+    }
+    if (captureFps >= 90f && durationMs > 1500) {
+        val speed = (30f / captureFps).coerceIn(0.125f, 1f)
+        return listOf(SlowSegment((durationMs * 0.15).toLong(), (durationMs * 0.85).toLong(), speed))
+    }
+    return emptyList()
 }
 
 @OptIn(UnstableApi::class)
 @Composable
-fun rememberVideoController(item: MediaItem): VideoController {
+fun rememberVideoController(item: MediaItem, loop: Boolean = true, uri: android.net.Uri = item.uri): VideoController {
     val context = LocalContext.current
-    val controller = remember(item.id) {
-        val player = ExoPlayer.Builder(context).build().apply {
-            repeatMode = Player.REPEAT_MODE_ONE
+    val controller = remember(item.id, uri) {
+        // FLAG_READ_SEF_DATA exposes Samsung slow-motion segments as track metadata.
+        val extractors = DefaultExtractorsFactory().setMp4ExtractorFlags(Mp4Extractor.FLAG_READ_SEF_DATA)
+        val player = ExoPlayer.Builder(context, DefaultMediaSourceFactory(context, extractors)).build().apply {
+            repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             volume = 0f
-            setMediaItem(ExoItem.fromUri(item.uri))
+            setMediaItem(ExoItem.fromUri(uri))
             prepare()
             playWhenReady = true
         }
@@ -91,6 +140,10 @@ fun rememberVideoController(item: MediaItem): VideoController {
             override fun onRenderedFirstFrame() {
                 controller.firstFrame = true
             }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                controller.slowMo = slowSegmentsOf(tracks, controller.player.duration.coerceAtLeast(item.durationMs))
+            }
         }
         controller.player.addListener(listener)
         onDispose {
@@ -100,9 +153,13 @@ fun rememberVideoController(item: MediaItem): VideoController {
     }
     LaunchedEffect(controller) {
         while (true) {
-            controller.position = controller.player.currentPosition
+            val pos = controller.player.currentPosition
+            controller.position = pos
             controller.duration = controller.player.duration.coerceAtLeast(0L)
-            delay(200)
+            // Apply slow-motion speed for whatever section we're in.
+            val want = controller.speedAt(pos)
+            if (controller.player.playbackParameters.speed != want) controller.player.setPlaybackSpeed(want)
+            delay(if (controller.slowMo.isEmpty()) 200 else 40)
         }
     }
     return controller
@@ -160,6 +217,15 @@ fun VideoControls(controller: VideoController, visible: Boolean, modifier: Modif
             )
             Text(formatTime(controller.duration), color = Color.White, fontSize = 12.sp)
             Spacer(Modifier.width(4.dp))
+            if (controller.slowMo.isNotEmpty()) {
+                IconButton(onClick = { controller.slowMoOn = !controller.slowMoOn }) {
+                    Icon(
+                        Icons.Rounded.SlowMotionVideo,
+                        if (controller.slowMoOn) "Play at normal speed" else "Play in slow motion",
+                        tint = if (controller.slowMoOn) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                }
+            }
             IconButton(onClick = controller::toggleMute) {
                 Icon(
                     if (controller.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,

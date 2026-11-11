@@ -27,6 +27,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.BurstMode
+import androidx.compose.material.icons.rounded.LibraryAdd
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -121,27 +129,41 @@ fun rememberThumbPx(): Int {
     }
 }
 
-/** Everything the grid can ask of its owner. */
+/** Everything a grid can ask of its owner. */
 class GridActions(
     val onOpen: (index: Int) -> Unit,
-    val onToggle: (id: Long) -> Unit,
+    val onToggle: (ids: List<Long>) -> Unit,
     val onDragStart: (index: Int) -> Unit,
     val onDragTo: (index: Int) -> Unit,
     val onDragEnd: () -> Unit,
     val onClearSelection: () -> Unit,
     val onSelectAll: () -> Unit,
     val onShare: () -> Unit,
-    val onStarSelected: () -> Unit,
-    val onTrashSelected: () -> Unit,
-    val onOpenTrash: () -> Unit,
+    val onStar: () -> Unit,
+    val onAddTo: () -> Unit,
+    val onTrash: () -> Unit,
 )
 
+/**
+ * A 4-wide photo grid with month headers, drag-select and the date scrubber.
+ * Used for all photos, albums, folders, favorites and search results.
+ */
 @Composable
 fun GridScreen(
     state: GridUiState,
     selection: Set<Long>,
     actions: GridActions,
+    title: String,
+    modifier: Modifier = Modifier,
     gridState: LazyGridState = rememberLazyGridState(),
+    large: Boolean = false,
+    subtitle: String? = null,
+    onBack: (() -> Unit)? = null,
+    topActions: @Composable RowScope.() -> Unit = {},
+    selectionMenu: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null,
+    header: (@Composable () -> Unit)? = null,
+    emptyText: String = "No photos yet",
+    extraBottom: Dp = 0.dp,
 ) {
     val clock = rememberShimmerClock()
     val shimmerBase = MaterialTheme.colorScheme.surfaceVariant
@@ -152,12 +174,13 @@ fun GridScreen(
     val selecting = selection.isNotEmpty()
 
     BackHandler(enabled = selecting) { actions.onClearSelection() }
+    if (onBack != null) BackHandler(enabled = !selecting) { onBack() }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val thumbPx = rememberThumbPx()
         val padding = PaddingValues(
             top = status.calculateTopPadding() + topBarHeight,
-            bottom = nav.calculateBottomPadding() + 24.dp,
+            bottom = nav.calculateBottomPadding() + 24.dp + extraBottom,
         )
 
         if (state.loading) {
@@ -173,14 +196,8 @@ fun GridScreen(
                     Box(Modifier.aspectRatio(1f).graphicsLayer { clip = true; shape = CellShape }.shimmer(clock, shimmerBase, shimmerHi))
                 }
             }
-        } else if (state.items.isEmpty()) {
-            Text(
-                "No photos yet",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.Center),
-            )
         } else {
+            val headerCount = if (header != null) 1 else 0
             LazyVerticalGrid(
                 columns = GridCells.Fixed(COLUMNS),
                 state = gridState,
@@ -189,8 +206,11 @@ fun GridScreen(
                 verticalArrangement = Arrangement.spacedBy(CellGap),
                 modifier = Modifier
                     .fillMaxSize()
-                    .dragSelect(gridState, state.entries, actions),
+                    .dragSelect(gridState, state.entries, headerCount, actions),
             ) {
+                if (header != null) {
+                    item(key = "header", span = { GridItemSpan(maxLineSpan) }, contentType = 2) { header() }
+                }
                 items(
                     count = state.entries.size,
                     key = { state.entries[it].key },
@@ -201,13 +221,25 @@ fun GridScreen(
                         is GridEntry.Header -> MonthHeader(e.title)
                         is GridEntry.Cell -> MediaCell(
                             item = e.item,
+                            stackSize = e.stack.size,
                             thumbPx = thumbPx,
                             clock = clock,
                             shimmerBase = shimmerBase,
                             shimmerHi = shimmerHi,
                             selecting = selecting,
-                            selected = e.item.id in selection,
-                            onClick = { if (selecting) actions.onToggle(e.item.id) else actions.onOpen(e.index) },
+                            selected = e.stack.all { it in selection },
+                            onClick = { if (selecting) actions.onToggle(e.stack) else actions.onOpen(e.index) },
+                        )
+                    }
+                }
+                if (state.items.isEmpty()) {
+                    item(key = "empty", span = { GridItemSpan(maxLineSpan) }, contentType = 3) {
+                        Text(
+                            emptyText,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(top = 96.dp, start = 32.dp, end = 32.dp),
                         )
                     }
                 }
@@ -216,7 +248,7 @@ fun GridScreen(
             if (state.items.size > 60) {
                 DateScrubber(
                     state = gridState,
-                    labelAt = { idx -> state.entries.getOrNull(idx)?.scrubLabel.orEmpty() },
+                    labelAt = { idx -> state.entries.getOrNull(idx - headerCount)?.scrubLabel.orEmpty() },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding(), end = 2.dp),
@@ -226,9 +258,14 @@ fun GridScreen(
 
         TopBar(
             height = topBarHeight,
-            count = state.items.size,
+            title = title,
+            large = large,
+            subtitle = subtitle,
+            onBack = onBack,
             selectedCount = selection.size,
             actions = actions,
+            topActions = topActions,
+            selectionMenu = selectionMenu,
         )
     }
 }
@@ -244,9 +281,10 @@ fun GridScreen(
 private fun Modifier.dragSelect(
     gridState: LazyGridState,
     entries: List<GridEntry>,
+    headerCount: Int,
     actions: GridActions,
 ): Modifier = this.then(
-    Modifier.pointerInput(entries) {
+    Modifier.pointerInput(entries, headerCount) {
         val edge = 72.dp.toPx()
 
         fun itemIndexAt(pos: Offset): Int? {
@@ -255,7 +293,7 @@ private fun Modifier.dragSelect(
             // so shift the touch point into that space.
             val p = Offset(pos.x, pos.y + info.viewportStartOffset).round()
             val hit = info.visibleItemsInfo.firstOrNull { IntRect(it.offset, it.size).contains(p) } ?: return null
-            return (entries.getOrNull(hit.index) as? GridEntry.Cell)?.index
+            return (entries.getOrNull(hit.index - headerCount) as? GridEntry.Cell)?.index
         }
 
         coroutineScope {
@@ -317,7 +355,17 @@ private fun Modifier.dragSelect(
 )
 
 @Composable
-private fun TopBar(height: Dp, count: Int, selectedCount: Int, actions: GridActions) {
+private fun TopBar(
+    height: Dp,
+    title: String,
+    large: Boolean,
+    subtitle: String?,
+    onBack: (() -> Unit)?,
+    selectedCount: Int,
+    actions: GridActions,
+    topActions: @Composable RowScope.() -> Unit,
+    selectionMenu: (@Composable ColumnScope.(close: () -> Unit) -> Unit)?,
+) {
     val bg = MaterialTheme.colorScheme.background
     val selecting = selectedCount > 0
     Box(
@@ -336,34 +384,29 @@ private fun TopBar(height: Dp, count: Int, selectedCount: Int, actions: GridActi
             modifier = Modifier.fillMaxSize(),
         ) { sel ->
             if (!sel) {
-                Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Photo Album", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                    if (count > 0) {
-                        Text(
-                            "  $count",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
+                Row(
+                    Modifier.fillMaxSize().padding(start = if (onBack != null) 4.dp else 20.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
                     }
-                    Spacer(Modifier.weight(1f))
-                    var menu by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Trash") },
-                                leadingIcon = { Icon(Icons.Outlined.Delete, null) },
-                                onClick = {
-                                    menu = false
-                                    actions.onOpenTrash()
-                                },
-                            )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            title,
+                            style = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (subtitle != null) {
+                            Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         }
                     }
+                    topActions()
                 }
             } else {
-                Row(Modifier.fillMaxSize().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = actions.onClearSelection) { Icon(Icons.Rounded.Close, "Cancel selection") }
                     AnimatedContent(
                         targetState = selectedCount,
@@ -373,14 +416,26 @@ private fun TopBar(height: Dp, count: Int, selectedCount: Int, actions: GridActi
                                 (slideOutVertically { if (up) -it else it } + fadeOut())
                         },
                         label = "count",
+                        modifier = Modifier.weight(1f),
                     ) { n ->
-                        Text("$n selected", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                        Text("$n", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
                     }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = actions.onSelectAll) { Icon(Icons.Rounded.SelectAll, "Select all") }
                     IconButton(onClick = actions.onShare) { Icon(Icons.Rounded.Share, "Share") }
-                    IconButton(onClick = actions.onStarSelected) { Icon(Icons.Rounded.StarBorder, "Star") }
-                    IconButton(onClick = actions.onTrashSelected) { Icon(Icons.Outlined.Delete, "Move to trash") }
+                    IconButton(onClick = actions.onStar) { Icon(Icons.Rounded.StarBorder, "Star") }
+                    IconButton(onClick = actions.onAddTo) { Icon(Icons.Rounded.LibraryAdd, "Add to album or tag") }
+                    IconButton(onClick = actions.onTrash) { Icon(Icons.Outlined.Delete, "Move to trash") }
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Select all") },
+                                leadingIcon = { Icon(Icons.Rounded.SelectAll, null) },
+                                onClick = { menu = false; actions.onSelectAll() },
+                            )
+                            selectionMenu?.invoke(this) { menu = false }
+                        }
+                    }
                 }
             }
         }
@@ -400,6 +455,7 @@ private fun MonthHeader(title: String) {
 @Composable
 private fun MediaCell(
     item: MediaItem,
+    stackSize: Int,
     thumbPx: Int,
     clock: State<Float>,
     shimmerBase: Color,
@@ -459,6 +515,20 @@ private fun MediaCell(
             }
             if (item.isFavorite) {
                 Icon(Icons.Rounded.Star, null, tint = Color.White, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(14.dp))
+            }
+            if (stackSize > 1) {
+                // Similar-photo stack: count pill, bottom-left.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(4.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                ) {
+                    Icon(Icons.Rounded.BurstMode, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    Text(" $stackSize", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
 

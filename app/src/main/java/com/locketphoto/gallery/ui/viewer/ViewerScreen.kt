@@ -36,6 +36,14 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.rounded.LibraryAdd
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
@@ -89,6 +97,13 @@ fun ViewerScreen(
     onShare: (MediaItem) -> Unit,
     onFavorite: (MediaItem) -> Unit,
     onTrash: (MediaItem) -> Unit,
+    tagsOf: (MediaItem) -> Set<String> = { emptySet() },
+    albumsOf: (MediaItem) -> List<String> = { emptyList() },
+    onAddTag: (MediaItem, String) -> Unit = { _, _ -> },
+    onRemoveTag: (MediaItem, String) -> Unit = { _, _ -> },
+    onAddTo: (MediaItem) -> Unit = {},
+    onEdit: ((MediaItem) -> Unit)? = null,
+    onSetWallpaper: (MediaItem) -> Unit = {},
 ) {
     if (items.isEmpty()) {
         LaunchedEffect(Unit) { onClose(0) }
@@ -98,6 +113,7 @@ fun ViewerScreen(
     var chrome by remember { mutableStateOf(true) }
     var infoFor by remember { mutableStateOf<MediaItem?>(null) }
     var activeVideo by remember { mutableStateOf<VideoController?>(null) }
+    val context = LocalContext.current
     val dismiss = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -128,6 +144,7 @@ fun ViewerScreen(
                 settled = page == pager.settledPage,
                 dismissOffset = if (isCurrent) dismiss.value else 0f,
                 dismissProgress = if (isCurrent) progress else 0f,
+                chromeVisible = chrome,
                 onTap = { chrome = !chrome },
                 onDismissDrag = { dy -> scope.launch { dismiss.snapTo(dismiss.value + dy) } },
                 onVideo = { v, on -> if (on) activeVideo = v else if (activeVideo === v) activeVideo = null },
@@ -148,7 +165,13 @@ fun ViewerScreen(
             exit = fadeOut() + slideOutVertically { -it / 2 },
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            TopChrome(current, onBack = { onClose(pager.currentPage) })
+            TopChrome(
+                current,
+                onBack = { onClose(pager.currentPage) },
+                onInfo = { infoFor = current },
+                onSetWallpaper = { current?.let(onSetWallpaper) },
+                onUseAs = { current?.let { useAs(context, it) } },
+            )
         }
         AnimatedVisibility(
             visible = chrome && progress < 0.05f,
@@ -162,13 +185,25 @@ fun ViewerScreen(
                 isFavorite = current?.isFavorite == true,
                 onShare = { current?.let(onShare) },
                 onFavorite = { current?.let(onFavorite) },
-                onInfo = { infoFor = current },
+                onEdit = onEdit?.let { e -> { current?.let(e) } },
+                onAddTo = { current?.let(onAddTo) },
                 onTrash = { current?.let(onTrash) },
             )
             }
         }
     }
-    infoFor?.let { InfoSheet(it, onDismiss = { infoFor = null }) }
+    infoFor?.let { shown ->
+        // Re-read the live item so tag edits show immediately.
+        val live = items.firstOrNull { it.id == shown.id } ?: shown
+        InfoSheet(
+            item = live,
+            tags = tagsOf(live),
+            albums = albumsOf(live),
+            onAddTag = { onAddTag(live, it) },
+            onRemoveTag = { onRemoveTag(live, it) },
+            onDismiss = { infoFor = null },
+        )
+    }
 }
 
 @Composable
@@ -179,6 +214,7 @@ private fun MediaPage(
     settled: Boolean,
     dismissOffset: Float,
     dismissProgress: Float,
+    chromeVisible: Boolean,
     onTap: () -> Unit,
     onDismissDrag: (Float) -> Unit,
     onDismissEnd: () -> Unit,
@@ -260,13 +296,20 @@ private fun MediaPage(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+                MotionPhotoLayer(item, active = isCurrent && settled && !zoom.isZoomed, chromeVisible = chromeVisible)
             }
         }
     }
 }
 
 @Composable
-private fun TopChrome(item: MediaItem?, onBack: () -> Unit) {
+private fun TopChrome(
+    item: MediaItem?,
+    onBack: () -> Unit,
+    onInfo: () -> Unit,
+    onSetWallpaper: () -> Unit,
+    onUseAs: () -> Unit,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -284,6 +327,26 @@ private fun TopChrome(item: MediaItem?, onBack: () -> Unit) {
                 Text(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).format(at), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
             }
         }
+        Spacer(Modifier.weight(1f))
+        IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, "Details", tint = Color.White) }
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Color.White) }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (item?.isVideo == false) {
+                    DropdownMenuItem(
+                        text = { Text("Set as wallpaper") },
+                        leadingIcon = { Icon(Icons.Outlined.Wallpaper, null) },
+                        onClick = { menu = false; onSetWallpaper() },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Use as…") },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
+                    onClick = { menu = false; onUseAs() },
+                )
+            }
+        }
     }
 }
 
@@ -291,8 +354,9 @@ private fun TopChrome(item: MediaItem?, onBack: () -> Unit) {
 private fun BottomChrome(
     isFavorite: Boolean,
     onShare: () -> Unit,
+    onEdit: (() -> Unit)?,
     onFavorite: () -> Unit,
-    onInfo: () -> Unit,
+    onAddTo: () -> Unit,
     onTrash: () -> Unit,
 ) {
     Row(
@@ -305,6 +369,7 @@ private fun BottomChrome(
             .padding(vertical = 8.dp),
     ) {
         IconButton(onClick = onShare) { Icon(Icons.Rounded.Share, "Share", tint = Color.White) }
+        if (onEdit != null) IconButton(onClick = onEdit) { Icon(Icons.Outlined.Tune, "Edit", tint = Color.White) }
         IconButton(onClick = onFavorite) {
             // Star pops with a bouncy scale when toggled.
             AnimatedContent(
@@ -321,9 +386,18 @@ private fun BottomChrome(
                 )
             }
         }
-        IconButton(onClick = onInfo) { Icon(Icons.Outlined.Info, "Details", tint = Color.White) }
+        IconButton(onClick = onAddTo) { Icon(Icons.Rounded.LibraryAdd, "Add to album or tag", tint = Color.White) }
         IconButton(onClick = onTrash) { Icon(Icons.Outlined.Delete, "Move to trash", tint = Color.White) }
     }
+}
+
+/** Hands the photo to another app as wallpaper / contact photo / etc. */
+private fun useAs(context: android.content.Context, item: MediaItem) {
+    val intent = android.content.Intent(android.content.Intent.ACTION_ATTACH_DATA)
+        .setDataAndType(item.uri, item.mimeType.ifBlank { "image/*" })
+        .putExtra("mimeType", item.mimeType)
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    runCatching { context.startActivity(android.content.Intent.createChooser(intent, null)) }
 }
 
 /** Dark, immersive viewer: light status icons, and system bars hide along with our chrome. */

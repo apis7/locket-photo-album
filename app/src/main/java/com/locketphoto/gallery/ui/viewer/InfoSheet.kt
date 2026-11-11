@@ -8,7 +8,19 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.text.format.Formatter
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.outlined.PhotoAlbum
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -61,9 +73,17 @@ private data class Details(
     val lon: Double? = null,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun InfoSheet(item: MediaItem, onDismiss: () -> Unit) {
+fun InfoSheet(
+    item: MediaItem,
+    tags: Set<String>,
+    albums: List<String>,
+    onAddTag: (String) -> Unit,
+    onRemoveTag: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var newTag by remember { mutableStateOf("") }
     val context = LocalContext.current
     var details by remember(item.id) { mutableStateOf<Details?>(null) }
     LaunchedEffect(item.id) { details = withContext(Dispatchers.IO) { loadDetails(context, item) } }
@@ -91,6 +111,9 @@ fun InfoSheet(item: MediaItem, onDismiss: () -> Unit) {
             )
             d?.camera?.let { InfoRow(Icons.Outlined.CameraAlt, it, d.exposure) }
             d?.folder?.let { InfoRow(Icons.Outlined.Folder, it.trimEnd('/'), null) }
+            if (albums.isNotEmpty()) {
+                InfoRow(Icons.Outlined.PhotoAlbum, albums.joinToString(", "), if (albums.size == 1) "Album" else "Albums")
+            }
             if (d?.lat != null && d.lon != null) {
                 InfoRow(
                     Icons.Outlined.Place,
@@ -102,6 +125,34 @@ fun InfoSheet(item: MediaItem, onDismiss: () -> Unit) {
                     },
                 )
             }
+            // Tags: tap x to remove, type to add.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+                Icon(Icons.AutoMirrored.Outlined.Label, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(18.dp))
+                Text("Tags", style = MaterialTheme.typography.bodyLarge)
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(start = 42.dp)) {
+                tags.forEach { tag ->
+                    InputChip(
+                        selected = false,
+                        onClick = { onRemoveTag(tag) },
+                        label = { Text(tag) },
+                        trailingIcon = { Icon(Icons.Rounded.Close, "Remove tag", Modifier.size(16.dp)) },
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = newTag,
+                onValueChange = { newTag = it.take(40) },
+                singleLine = true,
+                placeholder = { Text("Add a tag") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    if (newTag.isNotBlank()) onAddTag(newTag)
+                    newTag = ""
+                }),
+                modifier = Modifier.fillMaxWidth().padding(start = 42.dp, top = 4.dp).imePadding(),
+            )
         }
     }
 }

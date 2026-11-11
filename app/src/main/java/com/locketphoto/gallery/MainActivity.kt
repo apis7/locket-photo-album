@@ -50,18 +50,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.locketphoto.gallery.ui.components.LocalNavScope
 import com.locketphoto.gallery.ui.components.LocalSharedScope
-import com.locketphoto.gallery.ui.grid.GridActions
-import com.locketphoto.gallery.ui.grid.rememberThumbPx
-import com.locketphoto.gallery.ui.viewer.ViewerScreen
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.locketphoto.gallery.data.MediaRepository
-import com.locketphoto.gallery.ui.grid.GridScreen
-import com.locketphoto.gallery.ui.grid.GridViewModel
 import com.locketphoto.gallery.ui.theme.LocketTheme
 import com.locketphoto.gallery.ui.LocketRoot
 
