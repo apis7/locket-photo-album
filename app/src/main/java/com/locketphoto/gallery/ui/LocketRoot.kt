@@ -74,6 +74,7 @@ import com.locketphoto.gallery.ui.components.LocalSharedScope
 import com.locketphoto.gallery.ui.components.MediaRequester
 import com.locketphoto.gallery.ui.components.Tab
 import com.locketphoto.gallery.ui.components.rememberMediaRequester
+import com.locketphoto.gallery.ui.editor.EditorScreen
 import com.locketphoto.gallery.ui.grid.GridActions
 import com.locketphoto.gallery.ui.grid.GridScreen
 import com.locketphoto.gallery.ui.grid.GridUiState
@@ -100,6 +101,7 @@ private object R {
     fun grid(s: Source) = "grid|${s.encode()}"
     fun viewer(s: Source, i: Int) = "viewer|${s.encode()}|$i"
     fun wallpaper(s: Source, i: Int) = "wallpaper|${s.encode()}|$i"
+    fun edit(s: Source, i: Int) = "edit|${s.encode()}|$i"
     fun depth(r: String) = when {
         r == PHOTOS || r == ALBUMS || r == SEARCH -> 0
         r.startsWith("grid|") || r == TRASH -> 1
@@ -396,6 +398,31 @@ fun LocketRoot() {
                                 }
                             }
 
+                            parts[0] == "edit" -> {
+                                val source = Source.decode(parts.getOrElse(1) { "all" })
+                                val index = parts.getOrNull(2)?.toIntOrNull() ?: 0
+                                // Pin the item when the editor opens: saving can reorder the list.
+                                val item = remember(r) { itemsFor(source).getOrNull(index) }
+                                if (item == null) {
+                                    go(lastTab)
+                                } else {
+                                    EditorScreen(
+                                        item = item,
+                                        requestWrite = { uri, granted ->
+                                            requester.run({ MediaWriter.write(resolver, listOf(uri)) }) { ok -> if (ok) granted() }
+                                        },
+                                        onDone = { saved ->
+                                            // Land on the saved file (a new copy, or the overwritten original).
+                                            val latest = itemsFor(source)
+                                            val at = saved?.let { u -> latest.indexOfFirst { it.uri == u } }?.takeIf { it >= 0 } ?: index
+                                            route = R.viewer(source, at)
+                                            if (saved != null) toast("Saved")
+                                        },
+                                        onCancel = { route = R.viewer(source, index) },
+                                    )
+                                }
+                            }
+
                             parts[0] == "wallpaper" -> {
                                 val source = Source.decode(parts.getOrElse(1) { "all" })
                                 val item = itemsFor(source).getOrNull(parts.getOrNull(2)?.toIntOrNull() ?: 0)
@@ -445,6 +472,7 @@ fun LocketRoot() {
                                     onRemoveTag = { m, t -> vm.removeTag(listOf(m.id), t) },
                                     onAddTo = { addToIds = listOf(it.id) },
                                     onSetWallpaper = { m -> go(R.wallpaper(source, items.indexOf(m).coerceAtLeast(0))) },
+                                    onEdit = { m -> go(R.edit(source, items.indexOf(m).coerceAtLeast(0))) },
                                 )
                             }
                         }

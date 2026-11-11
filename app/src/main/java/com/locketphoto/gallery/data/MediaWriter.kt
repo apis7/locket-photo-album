@@ -18,6 +18,10 @@ object MediaWriter {
     fun trash(resolver: ContentResolver, uris: List<Uri>, value: Boolean): PendingIntent =
         MediaStore.createTrashRequest(resolver, uris, value)
 
+    /** Permission to overwrite files (used by the editor's "Save"). */
+    fun write(resolver: ContentResolver, uris: List<Uri>): PendingIntent =
+        MediaStore.createWriteRequest(resolver, uris)
+
     fun deleteForever(resolver: ContentResolver, uris: List<Uri>): PendingIntent =
         MediaStore.createDeleteRequest(resolver, uris)
 }
