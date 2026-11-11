@@ -66,6 +66,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -98,6 +100,7 @@ fun ViewerScreen(
     onFavorite: (MediaItem) -> Unit,
     onTrash: (MediaItem) -> Unit,
     tagsOf: (MediaItem) -> Set<String> = { emptySet() },
+    allTags: List<String> = emptyList(),
     albumsOf: (MediaItem) -> List<String> = { emptyList() },
     onAddTag: (MediaItem, String) -> Unit = { _, _ -> },
     onRemoveTag: (MediaItem, String) -> Unit = { _, _ -> },
@@ -112,6 +115,8 @@ fun ViewerScreen(
     val pager = rememberPagerState(initialPage = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))) { items.size }
     var chrome by remember { mutableStateOf(true) }
     var infoFor by remember { mutableStateOf<MediaItem?>(null) }
+    var tagFor by remember { mutableStateOf<MediaItem?>(null) }
+    val haptics = LocalHapticFeedback.current
     var activeVideo by remember { mutableStateOf<VideoController?>(null) }
     val context = LocalContext.current
     val dismiss = remember { Animatable(0f) }
@@ -146,6 +151,10 @@ fun ViewerScreen(
                 dismissProgress = if (isCurrent) progress else 0f,
                 chromeVisible = chrome,
                 onTap = { chrome = !chrome },
+                onLongPress = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    tagFor = item
+                },
                 onDismissDrag = { dy -> scope.launch { dismiss.snapTo(dismiss.value + dy) } },
                 onVideo = { v, on -> if (on) activeVideo = v else if (activeVideo === v) activeVideo = null },
                 onDismissEnd = {
@@ -192,6 +201,15 @@ fun ViewerScreen(
             }
         }
     }
+    tagFor?.let { m ->
+        QuickTagSheet(
+            tags = tagsOf(m),
+            allTags = allTags,
+            onAdd = { onAddTag(m, it) },
+            onRemove = { onRemoveTag(m, it) },
+            onDismiss = { tagFor = null },
+        )
+    }
     infoFor?.let { shown ->
         // Re-read the live item so tag edits show immediately.
         val live = items.firstOrNull { it.id == shown.id } ?: shown
@@ -216,6 +234,7 @@ private fun MediaPage(
     dismissProgress: Float,
     chromeVisible: Boolean,
     onTap: () -> Unit,
+    onLongPress: () -> Unit,
     onDismissDrag: (Float) -> Unit,
     onDismissEnd: () -> Unit,
     onVideo: (VideoController, Boolean) -> Unit,
@@ -227,7 +246,7 @@ private fun MediaPage(
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .zoomable(zoom, scope, onTap, onDismissDrag, onDismissEnd),
+            .zoomable(zoom, scope, onTap, onLongPress, onDismissDrag, onDismissEnd),
         contentAlignment = Alignment.Center,
     ) {
         // Fit the photo to the screen ourselves, so the shared box has the photo's true shape.

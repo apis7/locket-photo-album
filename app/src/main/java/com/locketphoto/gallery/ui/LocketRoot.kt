@@ -467,6 +467,7 @@ fun LocketRoot() {
                                     onFavorite = { ops.star(listOf(it)) },
                                     onTrash = { ops.trash(listOf(it)) },
                                     tagsOf = { library.tags[it.id].orEmpty() },
+                                    allTags = library.allTags,
                                     albumsOf = { albumNames[it.id].orEmpty() },
                                     onAddTag = { m, t -> vm.addTag(listOf(m.id), t) },
                                     onRemoveTag = { m, t -> vm.removeTag(listOf(m.id), t) },

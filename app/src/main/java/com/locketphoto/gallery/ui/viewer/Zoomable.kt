@@ -92,12 +92,14 @@ fun Modifier.zoomable(
     state: ZoomState,
     scope: CoroutineScope,
     onTap: () -> Unit,
+    onLongPress: () -> Unit,
     onDismissDrag: (dy: Float) -> Unit,
     onDismissEnd: () -> Unit,
 ): Modifier = this
     .pointerInput(state) {
         detectTapGestures(
             onTap = { onTap() },
+            onLongPress = { if (!state.isZoomed) onLongPress() },
             onDoubleTap = { pos ->
                 scope.launch { state.animateTo(if (state.isZoomed) 1f else DOUBLE_TAP_SCALE, pos) }
             },
