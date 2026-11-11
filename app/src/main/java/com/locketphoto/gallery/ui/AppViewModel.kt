@@ -196,6 +196,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun addTag(ids: Collection<Long>, tag: String) = viewModelScope.launch { store.addTag(ids, tag) }
     fun removeTag(ids: Collection<Long>, tag: String) = viewModelScope.launch { store.removeTag(ids, tag) }
 
+    // ---- Bulk edit ----
+    data class BulkProgress(val index: Int, val total: Int, val result: com.locketphoto.gallery.edit.BulkResult? = null)
+    val bulk = MutableStateFlow<BulkProgress?>(null)
+    private var bulkJob: kotlinx.coroutines.Job? = null
+
+    fun runBulk(items: List<MediaItem>, spec: com.locketphoto.gallery.edit.BulkSpec) {
+        bulkJob?.cancel()
+        bulk.value = BulkProgress(0, items.size)
+        bulkJob = viewModelScope.launch {
+            val result = com.locketphoto.gallery.edit.BulkEdit.run(getApplication(), items, spec) { i, n ->
+                bulk.value = BulkProgress(i, n)
+            }
+            bulk.value = BulkProgress(items.size, items.size, result)
+        }
+    }
+
+    fun cancelBulk() {
+        bulkJob?.cancel()
+        bulk.value = null
+    }
+
+    fun dismissBulk() { bulk.value = null }
+
     init {
         // Forget selections whose photos vanished (trashed elsewhere, etc).
         viewModelScope.launch {

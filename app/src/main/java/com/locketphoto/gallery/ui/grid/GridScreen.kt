@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.BurstMode
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,6 +90,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import com.locketphoto.gallery.ui.components.sharedMedia
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -110,7 +112,20 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-private const val COLUMNS = 4
+/**
+ * 4 across on phones (the design); more on wide screens — landscape, foldables, tablets —
+ * so cells stay roughly phone-sized instead of ballooning.
+ */
+@Composable
+fun rememberColumns(): Int {
+    val density = LocalDensity.current
+    val widthDp = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }.value
+    return when {
+        widthDp < 600 -> 4
+        widthDp < 840 -> 6
+        else -> 8
+    }
+}
 private val CellGap = 2.dp
 private val CellShape = RoundedCornerShape(3.dp)
 
@@ -121,7 +136,7 @@ private val CellShape = RoundedCornerShape(3.dp)
 @Composable
 fun rememberThumbPx(): Int {
     val width = LocalWindowInfo.current.containerSize.width
-    val cellPx = width / COLUMNS
+    val cellPx = width / rememberColumns()
     return when {
         cellPx <= 256 -> 256
         cellPx <= 384 -> 384
@@ -142,6 +157,7 @@ class GridActions(
     val onStar: () -> Unit,
     val onAddTo: () -> Unit,
     val onTrash: () -> Unit,
+    val onBulkEdit: () -> Unit = {},
 )
 
 /**
@@ -172,6 +188,7 @@ fun GridScreen(
     val nav = WindowInsets.navigationBars.asPaddingValues()
     val topBarHeight = 64.dp
     val selecting = selection.isNotEmpty()
+    val columns = rememberColumns()
 
     BackHandler(enabled = selecting) { actions.onClearSelection() }
     if (onBack != null) BackHandler(enabled = !selecting) { onBack() }
@@ -185,21 +202,21 @@ fun GridScreen(
 
         if (state.loading) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(COLUMNS),
+                columns = GridCells.Fixed(columns),
                 contentPadding = padding,
                 horizontalArrangement = Arrangement.spacedBy(CellGap),
                 verticalArrangement = Arrangement.spacedBy(CellGap),
                 userScrollEnabled = false,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                items(COLUMNS * 12) {
+                items(columns * 12) {
                     Box(Modifier.aspectRatio(1f).graphicsLayer { clip = true; shape = CellShape }.shimmer(clock, shimmerBase, shimmerHi))
                 }
             }
         } else {
             val headerCount = if (header != null) 1 else 0
             LazyVerticalGrid(
-                columns = GridCells.Fixed(COLUMNS),
+                columns = GridCells.Fixed(columns),
                 state = gridState,
                 contentPadding = padding,
                 horizontalArrangement = Arrangement.spacedBy(CellGap),
@@ -432,6 +449,11 @@ private fun TopBar(
                                 text = { Text("Select all") },
                                 leadingIcon = { Icon(Icons.Rounded.SelectAll, null) },
                                 onClick = { menu = false; actions.onSelectAll() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Edit together") },
+                                leadingIcon = { Icon(Icons.Rounded.Tune, null) },
+                                onClick = { menu = false; actions.onBulkEdit() },
                             )
                             selectionMenu?.invoke(this) { menu = false }
                         }

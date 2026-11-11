@@ -65,6 +65,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.locketphoto.gallery.data.MediaItem
 import com.locketphoto.gallery.data.MediaWriter
 import com.locketphoto.gallery.ui.albums.AddToSheet
+import com.locketphoto.gallery.ui.bulk.BulkEditSheet
 import com.locketphoto.gallery.ui.albums.AlbumsScreen
 import com.locketphoto.gallery.ui.albums.NameDialog
 import com.locketphoto.gallery.ui.components.BottomNav
@@ -143,6 +144,8 @@ fun LocketRoot() {
     var lastTab by rememberSaveable { mutableStateOf(R.PHOTOS) }
     var addToIds by remember { mutableStateOf<List<Long>?>(null) }
     var jumping by remember { mutableStateOf(false) }
+    var bulkFor by remember { mutableStateOf<List<MediaItem>?>(null) }
+    val bulk by vm.bulk.collectAsStateWithLifecycle()
     val photosGridState = rememberLazyGridState()
     val gridStates = remember { HashMap<String, LazyGridState>() }
 
@@ -191,6 +194,7 @@ fun LocketRoot() {
         onStar = { ops.star(selectedItems()) { vm.selection.clear() } },
         onAddTo = { addToIds = vm.selection.ids.value.toList() },
         onTrash = { ops.trash(selectedItems()) { vm.selection.clear() } },
+        onBulkEdit = { bulkFor = selectedItems() },
     )
 
     Box(Modifier.fillMaxSize()) {
@@ -532,6 +536,61 @@ fun LocketRoot() {
             },
             onAddTag = { vm.addTag(ids, it) },
             onRemoveTag = { vm.removeTag(ids, it) },
+        )
+    }
+
+    bulkFor?.let { chosen ->
+        val photos = chosen.filter { !it.isVideo }
+        BulkEditSheet(
+            photoCount = photos.size,
+            videoCount = chosen.size - photos.size,
+            onDismiss = { bulkFor = null },
+            onApply = { spec ->
+                bulkFor = null
+                if (spec.overwrite) {
+                    // One Android prompt covers every file we'll replace.
+                    val replaceable = photos.filter { com.locketphoto.gallery.edit.MediaSaver.canOverwritePhoto(it.mimeType) }
+                    if (replaceable.isEmpty()) {
+                        vm.runBulk(photos, spec)
+                    } else {
+                        requester.run({ MediaWriter.write(resolver, replaceable.map { it.uri }) }) { ok -> if (ok) vm.runBulk(photos, spec) }
+                    }
+                } else {
+                    vm.runBulk(photos, spec)
+                }
+                vm.selection.clear()
+            },
+        )
+    }
+
+    bulk?.let { p ->
+        val r = p.result
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text(if (r == null) "Editing photos…" else "Done") },
+            text = {
+                if (r == null) {
+                    androidx.compose.foundation.layout.Column {
+                        Text("${(p.index + 1).coerceAtMost(p.total)} of ${p.total}")
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { if (p.total == 0) 1f else p.index.toFloat() / p.total },
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
+                } else {
+                    Text(
+                        buildString {
+                            append(if (r.done == 1) "1 photo edited." else "${r.done} photos edited.")
+                            if (r.copiesInstead > 0) append(" ${r.copiesInstead} saved as copies (that format can't be replaced).")
+                            if (r.failed > 0) append(" ${r.failed} couldn't be edited.")
+                        },
+                    )
+                }
+            },
+            confirmButton = {
+                if (r == null) TextButton(onClick = vm::cancelBulk) { Text("Stop") }
+                else TextButton(onClick = vm::dismissBulk) { Text("OK") }
+            },
         )
     }
 
