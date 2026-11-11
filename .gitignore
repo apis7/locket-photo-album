@@ -16,3 +16,6 @@ captures/
 *.jks
 *.keystore
 keystore.properties
+
+# Claude Code local state (agent worktrees)
+.claude/
