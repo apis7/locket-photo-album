@@ -1,0 +1,4 @@
+<resources>
+    <!-- Debug builds get their own name so they are easy to tell apart from the real app. -->
+    <string name="app_name">Locket (dev)</string>
+</resources>
