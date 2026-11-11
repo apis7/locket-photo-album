@@ -545,7 +545,7 @@ fun LocketRoot() {
                     // Newest-first list: first photo taken on or before that day.
                     val idx = list.indexOfFirst { it.takenAt <= end }.takeIf { it >= 0 } ?: list.lastIndex
                     val entry = photosGrid.entryIndexOfItem.getOrNull(idx)?.takeIf { it >= 0 } ?: 0
-                    scope.launch { photosGridState.scrollToItem((entry - 1).coerceAtLeast(0)) }
+                    scope.launch { photosGridState.animateScrollToItem((entry - 1).coerceAtLeast(0)) } // animated so the date bubble shows where you landed
                 }) { Text("Go") }
             },
             dismissButton = { TextButton(onClick = { jumping = false }) { Text("Cancel") } },
