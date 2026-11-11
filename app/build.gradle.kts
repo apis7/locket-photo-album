@@ -55,6 +55,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.media3.exoplayer)
+    implementation(libs.media3.transformer)
+    implementation(libs.media3.effect)
     implementation(libs.androidx.exifinterface)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
