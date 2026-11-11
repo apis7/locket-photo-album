@@ -64,7 +64,6 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -93,6 +92,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import com.locketphoto.gallery.ui.components.sharedMedia
+import com.locketphoto.gallery.ui.components.TwoTapTrashButton
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -440,7 +440,7 @@ private fun TopBar(
                     IconButton(onClick = actions.onShare) { Icon(Icons.Rounded.Share, "Share") }
                     IconButton(onClick = actions.onStar) { Icon(Icons.Rounded.StarBorder, "Star") }
                     IconButton(onClick = actions.onAddTo) { Icon(Icons.Rounded.LibraryAdd, "Add to album or tag") }
-                    IconButton(onClick = actions.onTrash) { Icon(Icons.Outlined.Delete, "Move to trash") }
+                    TwoTapTrashButton(onConfirm = actions.onTrash, resetKey = selectedCount)
                     var menu by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }

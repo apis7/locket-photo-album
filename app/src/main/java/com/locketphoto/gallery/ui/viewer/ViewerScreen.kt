@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Wallpaper
@@ -48,6 +47,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import com.locketphoto.gallery.ui.theme.Gold
+import com.locketphoto.gallery.ui.components.TwoTapTrashButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -197,6 +197,7 @@ fun ViewerScreen(
                 onEdit = onEdit?.let { e -> { current?.let(e) } },
                 onAddTo = { current?.let(onAddTo) },
                 onTrash = { current?.let(onTrash) },
+                trashKey = current?.id,
             )
             }
         }
@@ -377,6 +378,7 @@ private fun BottomChrome(
     onFavorite: () -> Unit,
     onAddTo: () -> Unit,
     onTrash: () -> Unit,
+    trashKey: Any?,
 ) {
     Row(
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -406,7 +408,7 @@ private fun BottomChrome(
             }
         }
         IconButton(onClick = onAddTo) { Icon(Icons.Rounded.LibraryAdd, "Add to album or tag", tint = Color.White) }
-        IconButton(onClick = onTrash) { Icon(Icons.Outlined.Delete, "Move to trash", tint = Color.White) }
+        TwoTapTrashButton(onConfirm = onTrash, tint = Color.White, resetKey = trashKey)
     }
 }
 
