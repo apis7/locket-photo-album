@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -15,8 +17,27 @@ android {
         versionName = "0.1.0"
     }
 
+    // Real upload key: keystore.properties (gitignored) next to this repo's root, e.g.
+    //   storeFile=C:/Users/User/.android-keys/locket-upload.jks
+    //   storePassword=...  keyAlias=...  keyPassword=...
+    // Without it, release builds are signed with the debug key (local testing only).
+    val keyProps = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { f ->
+        Properties().apply { f.inputStream().use { load(it) } }
+    }
+    signingConfigs {
+        if (keyProps != null) {
+            create("upload") {
+                storeFile = file(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = if (keyProps != null) signingConfigs.getByName("upload") else signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
