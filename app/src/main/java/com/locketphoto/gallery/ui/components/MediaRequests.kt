@@ -58,6 +58,7 @@ class MediaRequester internal constructor(private val context: Context) {
 
     internal fun markAsked() = prefs.edit { putBoolean(KEY_ASKED, true) }
 
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
     internal fun openSettings() {
         val intent = Intent(Settings.ACTION_REQUEST_MANAGE_MEDIA, Uri.fromParts("package", context.packageName, null))
         context.startActivity(intent)
@@ -110,7 +111,7 @@ fun rememberMediaRequester(): MediaRequester {
                     requester.promptFor = null
                     requester.markAsked()
                     requester.runOnResume = pending
-                    requester.openSettings()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) requester.openSettings() else pending()
                 }) { Text("Turn it on") }
             },
             dismissButton = {

@@ -270,7 +270,7 @@ internal fun LocketSlider(
                 modifier = Modifier.scale(labelScale).padding(horizontal = 4.dp),
             )
         }
-        BoxWithConstraints(
+        Box(
             Modifier
                 .fillMaxWidth()
                 .height(36.dp)

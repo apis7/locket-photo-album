@@ -193,7 +193,7 @@ fun GridScreen(
     BackHandler(enabled = selecting) { actions.onClearSelection() }
     if (onBack != null) BackHandler(enabled = !selecting) { onBack() }
 
-    BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val thumbPx = rememberThumbPx()
         val padding = PaddingValues(
             top = status.calculateTopPadding() + topBarHeight,

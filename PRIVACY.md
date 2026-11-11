@@ -14,7 +14,7 @@ accounts, no ads, no analytics, no crash reporting and no tracking of any kind.
 
 | Permission | Why |
 |---|---|
-| Photos and videos | To show your photos and videos, and to edit, star, trash or restore them when you ask. |
+| Photos and videos (all, or only the ones you pick) | To show your photos and videos, and to edit, star, trash or restore them when you ask. |
 | Photo location (`ACCESS_MEDIA_LOCATION`) | To show where a photo was taken in its Details panel. It is never sent anywhere. |
 | Media management (optional) | If you turn it on, starring and trashing skip Android's confirmation each time. |
 | Set wallpaper | To set a photo as your home or lock screen wallpaper when you ask. |
@@ -25,6 +25,9 @@ The albums and tags you create, and small fingerprints used to stack similar pho
 turn that on), are kept in a database inside the app on your phone. Nobody else can see them,
 including us. Uninstalling the app deletes them. Your photos themselves stay where they are in
 your phone's storage.
+
+The app opts out of Android's cloud backup. When you move to a new phone using Android's
+phone-to-phone transfer, your albums and tags come along over that local transfer.
 
 ## Sharing
 

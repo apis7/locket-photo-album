@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.Button
@@ -74,35 +76,78 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val mediaPermissions: Array<String> =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+private val mediaPermissions: Array<String> = when {
+    Build.VERSION.SDK_INT >= 34 -> arrayOf(
+        Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.READ_MEDIA_VIDEO,
+        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+        Manifest.permission.ACCESS_MEDIA_LOCATION,
+    )
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ->
         arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.ACCESS_MEDIA_LOCATION)
-    } else {
-        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.ACCESS_MEDIA_LOCATION)
-    }
+    else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.ACCESS_MEDIA_LOCATION)
+}
 
-// Location is optional (info panel only); access to photos is what gates the app.
-private fun hasMediaAccess(context: Context) = mediaPermissions.filter { it != Manifest.permission.ACCESS_MEDIA_LOCATION }.all {
-    ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+private fun has(context: Context, p: String) = ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
+
+private enum class Access { None, Partial, Full }
+
+/** Location is optional (Details only); access to photos is what gates the app. */
+private fun mediaAccess(context: Context): Access = when {
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        has(context, Manifest.permission.READ_MEDIA_IMAGES) && has(context, Manifest.permission.READ_MEDIA_VIDEO) -> Access.Full
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && has(context, Manifest.permission.READ_EXTERNAL_STORAGE) -> Access.Full
+    // Android 14+: the user chose "Select photos" — show what they picked.
+    Build.VERSION.SDK_INT >= 34 && has(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) -> Access.Partial
+    else -> Access.None
+}
+
+/** Shown when only some photos were shared with the app (Android 14+). */
+@Composable
+private fun PartialAccessBanner(onManage: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.statusBars)
+            .padding(top = 64.dp),
+    ) {
+        androidx.compose.foundation.layout.Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 4.dp),
+        ) {
+            Text("Showing only the photos you picked", style = MaterialTheme.typography.bodyMedium)
+            androidx.compose.material3.TextButton(onClick = onManage) { Text("Allow all") }
+        }
+    }
 }
 
 @Composable
 private fun PermissionGate(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    var granted by remember { mutableStateOf(hasMediaAccess(context)) }
+    var access by remember { mutableStateOf(mediaAccess(context)) }
     var asks by remember { mutableIntStateOf(0) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        granted = hasMediaAccess(context)
+        access = mediaAccess(context)
         asks++
     }
-    // Re-check when returning from system Settings.
+    // Re-check when returning from system Settings (or after changing the selection).
     LifecycleResumeEffect(Unit) {
-        granted = hasMediaAccess(context)
+        access = mediaAccess(context)
         onPauseOrDispose { }
     }
 
-    if (granted) {
-        content()
+    if (access != Access.None) {
+        Box(Modifier.fillMaxSize()) {
+            content()
+            if (access == Access.Partial) {
+                PartialAccessBanner(
+                    onManage = { launcher.launch(mediaPermissions) },
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            }
+        }
         return
     }
 
