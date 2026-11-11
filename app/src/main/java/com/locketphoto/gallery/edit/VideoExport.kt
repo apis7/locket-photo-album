@@ -57,8 +57,9 @@ data class VideoEdit(
     val text: VideoText = VideoText(),
     val muted: Boolean = false,
 ) {
-    fun rotatedCw() = copy(geometry = geometry.rotatedCw(), text = text.copy(at = NPoint(1f - text.at.y, text.at.x)))
-    fun mirrored() = copy(geometry = geometry.mirrored(), text = text.copy(at = NPoint(1f - text.at.x, text.at.y)))
+    // The caption sits in the output frame (drawn after rotate/crop), so it stays put.
+    fun rotatedCw() = copy(geometry = geometry.rotatedCw())
+    fun mirrored() = copy(geometry = geometry.mirrored())
 }
 
 /** Upright size, length and slow-motion flavour of a video file. */

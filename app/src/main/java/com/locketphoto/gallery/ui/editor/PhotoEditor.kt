@@ -240,7 +240,7 @@ internal fun PhotoEditor(
                     scaleIn(spring(dampingRatio = 0.6f), initialScale = 0.96f)) togetherWith fadeOut(spring(stiffness = Spring.StiffnessHigh))
             },
             label = "panel",
-            modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 176.dp),
         ) { t ->
             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
                 when (t) {

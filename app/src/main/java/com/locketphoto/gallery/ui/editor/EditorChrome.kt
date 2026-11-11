@@ -180,8 +180,7 @@ internal fun ToolTabs(tabs: List<ToolTab>, selected: String, onSelect: (String) 
     Box(
         Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         if (sel != null) {
@@ -189,33 +188,34 @@ internal fun ToolTabs(tabs: List<ToolTab>, selected: String, onSelect: (String) 
                 Modifier
                     .offset(x = x)
                     .width(w)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Gold.copy(alpha = 0.18f))
-                    .border(1.dp, Gold.copy(alpha = 0.5f), RoundedCornerShape(50)),
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Gold.copy(alpha = 0.16f))
+                    .border(1.dp, Gold.copy(alpha = 0.45f), RoundedCornerShape(20.dp)),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth()) {
             for (t in tabs) {
                 val on = t.key == selected
                 val tint by animateColorAsState(if (on) Gold else Color.White.copy(alpha = 0.75f), label = "tabTint")
-                val s by animateFloatAsState(if (on) 1.06f else 1f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "tabScale")
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                val s by animateFloatAsState(if (on) 1.08f else 1f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "tabScale")
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
                     modifier = Modifier
+                        .weight(1f)
                         .onGloballyPositioned { bounds[t.key] = it.positionInParent().x to it.size.width.toFloat() }
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(50))
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(20.dp))
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                             if (!on) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onSelect(t.key)
                         }
-                        .padding(horizontal = 14.dp)
                         .scale(s),
                 ) {
-                    Icon(t.icon, null, tint = tint, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(t.label, color = tint, fontSize = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium)
+                    Icon(t.icon, null, tint = tint, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.height(3.dp))
+                    Text(t.label, color = tint, fontSize = 11.sp, maxLines = 1, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium)
                 }
             }
         }

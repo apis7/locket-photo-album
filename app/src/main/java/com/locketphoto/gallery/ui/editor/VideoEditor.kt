@@ -250,7 +250,7 @@ internal fun VideoEditor(
                     scaleIn(spring(dampingRatio = 0.6f), initialScale = 0.96f)) togetherWith fadeOut(spring(stiffness = Spring.StiffnessHigh))
             },
             label = "vpanel",
-            modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 176.dp),
         ) { t ->
             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
                 val i = info
