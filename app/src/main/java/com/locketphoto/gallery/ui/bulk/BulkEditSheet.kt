@@ -27,6 +27,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -155,7 +156,16 @@ private fun Section(title: String) {
 private fun LabeledSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(96.dp))
-        Slider(value = value, onValueChange = onChange, valueRange = range, modifier = Modifier.weight(1f))
+        // Centered sliders (-1..1) shouldn't look half-full at zero: one track color throughout.
+        val centered = range.start < 0f
+        val track = MaterialTheme.colorScheme.surfaceContainerHigh
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            colors = if (centered) SliderDefaults.colors(activeTrackColor = track, inactiveTrackColor = track) else SliderDefaults.colors(),
+            modifier = Modifier.weight(1f),
+        )
         Text(
             "${(value * 100).toInt()}",
             style = MaterialTheme.typography.labelMedium,
