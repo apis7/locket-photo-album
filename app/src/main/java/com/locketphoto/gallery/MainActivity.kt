@@ -60,16 +60,32 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.locketphoto.gallery.ui.theme.LocketTheme
 import com.locketphoto.gallery.ui.LocketRoot
+import com.locketphoto.gallery.ui.viewer.ExternalViewer
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // "Open with Locket" from another app (camera, files, messages…).
+        val openUri = intent.takeIf { it.action == Intent.ACTION_VIEW || it.action == "com.android.camera.action.REVIEW" }?.data
+        val openType = intent.type
         setContent {
             LocketTheme {
                 // Surface also sets the default text/icon color for light and dark mode.
                 androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    PermissionGate { LocketRoot() }
+                    if (openUri == null) {
+                        PermissionGate { LocketRoot() }
+                    } else {
+                        // Another app granted us this one file, so show it even without library access.
+                        val thumbPx = com.locketphoto.gallery.ui.grid.rememberThumbPx()
+                        PermissionGate(
+                            denied = {
+                                ExternalViewer(openUri, openType, thumbPx, onClose = ::finish, onShare = {
+                                    com.locketphoto.gallery.ui.shareMedia(this, arrayListOf(it.uri))
+                                })
+                            },
+                        ) { LocketRoot(openUri, openType, onExit = ::finish) }
+                    }
                 }
             }
         }
@@ -124,7 +140,11 @@ private fun PartialAccessBanner(onManage: () -> Unit, modifier: Modifier = Modif
 }
 
 @Composable
-private fun PermissionGate(content: @Composable () -> Unit) {
+private fun PermissionGate(
+    /** Shown instead of the "Allow access" screen when access is missing. */
+    denied: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
     var access by remember { mutableStateOf(mediaAccess(context)) }
     var asks by remember { mutableIntStateOf(0) }
@@ -148,6 +168,10 @@ private fun PermissionGate(content: @Composable () -> Unit) {
                 )
             }
         }
+        return
+    }
+    if (denied != null) {
+        denied()
         return
     }
 

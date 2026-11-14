@@ -107,6 +107,8 @@ fun ViewerScreen(
     onAddTo: (MediaItem) -> Unit = {},
     onEdit: ((MediaItem) -> Unit)? = null,
     onSetWallpaper: (MediaItem) -> Unit = {},
+    /** False for a file opened from another app that isn't in the library: no star, albums, trash or edit. */
+    libraryActions: Boolean = true,
 ) {
     if (items.isEmpty()) {
         LaunchedEffect(Unit) { onClose(0) }
@@ -178,7 +180,7 @@ fun ViewerScreen(
                 current,
                 onBack = { onClose(pager.currentPage) },
                 onInfo = { infoFor = current },
-                onSetWallpaper = { current?.let(onSetWallpaper) },
+                onSetWallpaper = if (libraryActions) ({ current?.let(onSetWallpaper) }) else null,
                 onUseAs = { current?.let { useAs(context, it) } },
             )
         }
@@ -194,10 +196,11 @@ fun ViewerScreen(
                 isFavorite = current?.isFavorite == true,
                 onShare = { current?.let(onShare) },
                 onFavorite = { current?.let(onFavorite) },
-                onEdit = onEdit?.let { e -> { current?.let(e) } },
+                onEdit = onEdit?.takeIf { libraryActions }?.let { e -> { current?.let(e) } },
                 onAddTo = { current?.let(onAddTo) },
                 onTrash = { current?.let(onTrash) },
                 trashKey = current?.id,
+                libraryActions = libraryActions,
             )
             }
         }
@@ -327,7 +330,7 @@ private fun TopChrome(
     item: MediaItem?,
     onBack: () -> Unit,
     onInfo: () -> Unit,
-    onSetWallpaper: () -> Unit,
+    onSetWallpaper: (() -> Unit)?,
     onUseAs: () -> Unit,
 ) {
     Row(
@@ -353,7 +356,7 @@ private fun TopChrome(
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Color.White) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                if (item?.isVideo == false) {
+                if (item?.isVideo == false && onSetWallpaper != null) {
                     DropdownMenuItem(
                         text = { Text("Set as wallpaper") },
                         leadingIcon = { Icon(Icons.Outlined.Wallpaper, null) },
@@ -379,6 +382,7 @@ private fun BottomChrome(
     onAddTo: () -> Unit,
     onTrash: () -> Unit,
     trashKey: Any?,
+    libraryActions: Boolean,
 ) {
     Row(
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -391,7 +395,7 @@ private fun BottomChrome(
     ) {
         IconButton(onClick = onShare) { Icon(Icons.Rounded.Share, "Share", tint = Color.White) }
         if (onEdit != null) IconButton(onClick = onEdit) { Icon(Icons.Outlined.Tune, "Edit", tint = Color.White) }
-        IconButton(onClick = onFavorite) {
+        if (libraryActions) IconButton(onClick = onFavorite) {
             // Star pops with a bouncy scale when toggled.
             AnimatedContent(
                 targetState = isFavorite,
@@ -407,8 +411,10 @@ private fun BottomChrome(
                 )
             }
         }
-        IconButton(onClick = onAddTo) { Icon(Icons.Rounded.LibraryAdd, "Add to album or tag", tint = Color.White) }
-        TwoTapTrashButton(onConfirm = onTrash, tint = Color.White, resetKey = trashKey)
+        if (libraryActions) {
+            IconButton(onClick = onAddTo) { Icon(Icons.Rounded.LibraryAdd, "Add to album or tag", tint = Color.White) }
+            TwoTapTrashButton(onConfirm = onTrash, tint = Color.White, resetKey = trashKey)
+        }
     }
 }
 

@@ -4,6 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.Color
+import com.locketphoto.gallery.data.ExternalMedia
+import com.locketphoto.gallery.ui.viewer.ExternalViewer
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionLayout
@@ -92,13 +97,15 @@ import kotlinx.coroutines.launch
 /**
  * Routes are plain strings so they survive rotation and process death:
  * tabs "photos" / "albums" / "search", "grid|<source>", "viewer|<source>|<i>",
- * "wallpaper|<source>|<i>", "trash".
+ * "wallpaper|<source>|<i>", "trash"; "opening" / "external" for a file another app asked us to open.
  */
 private object R {
     const val PHOTOS = "photos"
     const val ALBUMS = "albums"
     const val SEARCH = "search"
     const val TRASH = "trash"
+    const val OPENING = "opening"
+    const val EXTERNAL = "external"
     fun grid(s: Source) = "grid|${s.encode()}"
     fun viewer(s: Source, i: Int) = "viewer|${s.encode()}|$i"
     fun wallpaper(s: Source, i: Int) = "wallpaper|${s.encode()}|$i"
@@ -117,7 +124,12 @@ private object R {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LocketRoot() {
+fun LocketRoot(
+    /** A photo or video another app asked us to open ("Open with"); back then returns to that app. */
+    openUri: Uri? = null,
+    openType: String? = null,
+    onExit: () -> Unit = {},
+) {
     val context = LocalContext.current
     val vm: AppViewModel = viewModel()
     val trashVm: TrashViewModel = viewModel { TrashViewModel(vm.repo) }
@@ -140,7 +152,7 @@ fun LocketRoot() {
     val scope = rememberCoroutineScope()
     val resolver = context.contentResolver
 
-    var route by rememberSaveable { mutableStateOf(R.PHOTOS) }
+    var route by rememberSaveable { mutableStateOf(if (openUri != null) R.OPENING else R.PHOTOS) }
     var lastTab by rememberSaveable { mutableStateOf(R.PHOTOS) }
     var addToIds by remember { mutableStateOf<List<Long>?>(null) }
     var jumping by remember { mutableStateOf(false) }
@@ -150,6 +162,15 @@ fun LocketRoot() {
     val gridStates = remember { HashMap<String, LazyGridState>() }
 
     val list = all.orEmpty()
+
+    // Opened from another app: show that file in the library viewer, so the rest can be swiped
+    // through; if it isn't in the library (another app's private file), show it on its own.
+    LaunchedEffect(route, all) {
+        if (route != R.OPENING || openUri == null) return@LaunchedEffect
+        val loaded = all ?: return@LaunchedEffect
+        val at = ExternalMedia.indexIn(loaded, openUri)
+        route = if (at >= 0) R.viewer(Source.All, at) else R.EXTERNAL
+    }
     fun itemsFor(s: Source) = vm.itemsFor(s, list, library, searchResults)
     fun stateFor(s: Source): GridUiState = when (s) {
         Source.All -> photosGrid
@@ -221,6 +242,14 @@ fun LocketRoot() {
                     CompositionLocalProvider(LocalNavScope provides this) {
                         val parts = r.split('|')
                         when {
+                            r == R.OPENING -> Box(Modifier.fillMaxSize().background(Color.Black))
+                            r == R.EXTERNAL && openUri != null -> ExternalViewer(
+                                uri = openUri,
+                                type = openType,
+                                thumbPx = thumbPx,
+                                onClose = onExit,
+                                onShare = { shareMedia(context, arrayListOf(it.uri)) },
+                            )
                             r == R.PHOTOS -> GridScreen(
                                 state = photosGrid,
                                 selection = selection,
@@ -454,7 +483,8 @@ fun LocketRoot() {
                                     items = items,
                                     startIndex = start,
                                     thumbPx = thumbPx,
-                                    onClose = { index ->
+                                    onClose = close@{ index ->
+                                        if (openUri != null) return@close onExit()
                                         // Make sure the photo we land on is on screen, so it can fly home.
                                         val gs = gridStateFor(source)
                                         val st = stateFor(source)
